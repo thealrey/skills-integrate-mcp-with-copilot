@@ -3,6 +3,19 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  const loginForm = document.getElementById("login-form");
+  const logoutButton = document.getElementById("logout-button");
+  const authMessage = document.getElementById("auth-message");
+  let accessToken = localStorage.getItem("access_token");
+
+  function authHeaders() {
+    return accessToken ? { Authorization: `Bearer ${accessToken}` } : {};
+  }
+
+  function updateAuthControls() {
+    loginForm.classList.toggle("hidden", Boolean(accessToken));
+    logoutButton.classList.toggle("hidden", !accessToken);
+  }
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -30,7 +43,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 ${details.participants
                   .map(
                     (email) =>
-                      `<li><span class="participant-email">${email}</span><button class="delete-btn" data-activity="${name}" data-email="${email}">❌</button></li>`
+                      `<li><span class="participant-email">${email}</span>${
+                        accessToken
+                          ? `<button class="delete-btn" data-activity="${name}" data-email="${email}">Remove</button>`
+                          : ""
+                      }</li>`
                   )
                   .join("")}
               </ul>
@@ -80,6 +97,7 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/unregister?email=${encodeURIComponent(email)}`,
         {
           method: "DELETE",
+          headers: authHeaders(),
         }
       );
 
@@ -124,6 +142,7 @@ document.addEventListener("DOMContentLoaded", () => {
         )}/signup?email=${encodeURIComponent(email)}`,
         {
           method: "POST",
+          headers: authHeaders(),
         }
       );
 
@@ -155,6 +174,46 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  loginForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    try {
+      const response = await fetch("/auth/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: document.getElementById("username").value,
+          password: document.getElementById("password").value,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.detail || "Login failed");
+      }
+      accessToken = result.access_token;
+      localStorage.setItem("access_token", accessToken);
+      loginForm.reset();
+      authMessage.textContent = "Logged in successfully.";
+      authMessage.className = "success";
+      updateAuthControls();
+      fetchActivities();
+    } catch (error) {
+      authMessage.textContent = error.message;
+      authMessage.className = "error";
+    }
+    authMessage.classList.remove("hidden");
+  });
+
+  logoutButton.addEventListener("click", () => {
+    accessToken = null;
+    localStorage.removeItem("access_token");
+    authMessage.textContent = "Logged out.";
+    authMessage.className = "success";
+    authMessage.classList.remove("hidden");
+    updateAuthControls();
+    fetchActivities();
+  });
+
   // Initialize app
+  updateAuthControls();
   fetchActivities();
 });
